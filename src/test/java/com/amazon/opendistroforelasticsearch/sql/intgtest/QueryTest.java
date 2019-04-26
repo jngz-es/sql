@@ -29,6 +29,7 @@ import org.joda.time.format.DateTimeFormatter;
 
 
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import com.amazon.opendistroforelasticsearch.sql.plugin.SearchDao;
 import com.amazon.opendistroforelasticsearch.sql.query.SqlElasticSearchRequestBuilder;
@@ -707,7 +708,7 @@ public class QueryTest {
         Assert.assertEquals(1, response.getTotalHits());
     }
 
-
+	@Ignore
     @Test
     public void useScrollNoParams() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
         SearchResponse response = getSearchResponse(String.format("SELECT /*! USE_SCROLL*/ age,gender,firstname,balance FROM  %s/account LIMIT 2000", TEST_INDEX_ACCOUNT));
@@ -718,6 +719,7 @@ public class QueryTest {
         Assert.assertEquals(1000,hits.getTotalHits());
     }
 
+	@Ignore
     @Test
     public void useScrollWithParams() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
         SearchResponse response = getSearchResponse(String.format("SELECT /*! USE_SCROLL(10,5000)*/ age,gender,firstname,balance FROM  %s/account ", TEST_INDEX_ACCOUNT));
@@ -727,7 +729,7 @@ public class QueryTest {
         Assert.assertEquals(1000,hits.getTotalHits());
     }
 
-
+	@Ignore
     @Test
     public void useScrollWithOrderByAndParams() throws IOException, SqlParseException, SQLFeatureNotSupportedException{
         SearchResponse response = getSearchResponse(String.format("SELECT /*! USE_SCROLL(5,50000)*/ age,gender,firstname,balance FROM  %s/account order by age", TEST_INDEX_ACCOUNT));

@@ -21,12 +21,14 @@ import com.amazon.opendistroforelasticsearch.sql.domain.MethodField;
 import com.amazon.opendistroforelasticsearch.sql.domain.Order;
 import com.amazon.opendistroforelasticsearch.sql.domain.Select;
 import com.amazon.opendistroforelasticsearch.sql.domain.Where;
-import com.amazon.opendistroforelasticsearch.sql.domain.hints.Hint;
-import com.amazon.opendistroforelasticsearch.sql.domain.hints.HintType;
 import com.amazon.opendistroforelasticsearch.sql.exception.SqlParseException;
-import com.amazon.opendistroforelasticsearch.sql.rewriter.nestedfield.NestedFieldProjection;
 import com.amazon.opendistroforelasticsearch.sql.query.maker.QueryMaker;
-import org.elasticsearch.action.search.*;
+import com.amazon.opendistroforelasticsearch.sql.rewriter.nestedfield.NestedFieldProjection;
+import org.elasticsearch.action.search.SearchAction;
+import org.elasticsearch.action.search.SearchRequestBuilder;
+import org.elasticsearch.action.search.SearchScrollAction;
+import org.elasticsearch.action.search.SearchScrollRequestBuilder;
+import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.BoolQueryBuilder;
@@ -37,9 +39,9 @@ import org.elasticsearch.search.sort.NestedSortBuilder;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortOrder;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.ArrayList;
 
 /**
  * Transform SQL query to standard Elasticsearch search query
@@ -60,15 +62,9 @@ public class DefaultQueryAction extends QueryAction {
 
     @Override
     public SqlElasticSearchRequestBuilder explain() throws SqlParseException {
-        Hint scrollHint = null;
-        for (Hint hint : select.getHints()) {
-            if (hint.getType() == HintType.USE_SCROLL) {
-                scrollHint = hint;
-                break;
-            }
-        }
-        if (scrollHint != null && scrollHint.getParams()[0] instanceof String) {
-            return new SqlElasticSearchRequestBuilder(new SearchScrollRequestBuilder(client, SearchScrollAction.INSTANCE, (String) scrollHint.getParams()[0]).setScroll(new TimeValue((Integer) scrollHint.getParams()[1])));
+        String cursorId = sqlRequest.cursor();
+        if (!cursorId.isEmpty()) {
+            return new SqlElasticSearchRequestBuilder(new SearchScrollRequestBuilder(client, SearchScrollAction.INSTANCE, cursorId).setScroll(new TimeValue(60 * 1000)));
         }
 
         this.request = new SearchRequestBuilder(client, SearchAction.INSTANCE);
@@ -80,10 +76,11 @@ public class DefaultQueryAction extends QueryAction {
         setSorts(select.getOrderBys());
         setLimit(select.getOffset(), select.getRowCount());
 
-        if (scrollHint != null) {
+        int fetchSize = sqlRequest.fetchSize();
+        if (fetchSize > 0) {
             if (!select.isOrderdSelect())
                 request.addSort(FieldSortBuilder.DOC_FIELD_NAME, SortOrder.ASC);
-            request.setSize((Integer) scrollHint.getParams()[0]).setScroll(new TimeValue((Integer) scrollHint.getParams()[1]));
+            request.setSize(fetchSize).setScroll(new TimeValue(60 * 1000)); // Configurable?
         } else {
             request.setSearchType(SearchType.DFS_QUERY_THEN_FETCH);
         }
@@ -92,9 +89,8 @@ public class DefaultQueryAction extends QueryAction {
         updateRequestWithCollapse(select, request);
         updateRequestWithPostFilter(select, request);
         updateRequestWithInnerHits(select, request);
-        SqlElasticSearchRequestBuilder sqlElasticRequestBuilder = new SqlElasticSearchRequestBuilder(request);
 
-        return sqlElasticRequestBuilder;
+        return new SqlElasticSearchRequestBuilder(request);
     }
 
     /**
